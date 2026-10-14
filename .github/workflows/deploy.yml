@@ -68,33 +68,14 @@ jobs:
           port: ${{ secrets.SERVER_PORT || 22 }}
           command_timeout: 5m
           script: |
-            # Проверка Docker
-            echo "=== Проверка Docker ==="
-            docker --version
-            docker info || echo "Docker не запущен!"
-
-            # Проверка текущего контейнера
-            echo "=== Текущие контейнеры ==="
-            docker ps -a | grep time-server || echo "Контейнер time-server не найден!"
-
-            # Логинимся в GHCR на сервере
-            echo ${{ secrets.GITHUB_TOKEN }} | docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
-
             # Останавливаем и удаляем старый контейнер, если он есть
             echo "=== Остановка старого контейнера ==="
             docker stop time-server || true
             docker rm time-server || true
 
-            # Удаляем старый образ
-            echo "=== Удаление старого образа ==="
-            docker rmi ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest || true
-
             # Скачиваем новый образ
             echo "=== Скачивание нового образа ==="
-            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-
-            # Создаём тег latest для нового образа
-            docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
 
             # Запускаем новый контейнер
             echo "=== Запуск контейнера ==="
@@ -102,7 +83,7 @@ jobs:
               --name time-server \
               --restart unless-stopped \
               -p 8080:8000 \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
 
             # Ждём запуска
             sleep 3
@@ -114,10 +95,6 @@ jobs:
             # Логи контейнера
             echo "=== Логи контейнера ==="
             docker logs time-server
-
-            # Проверка порта
-            echo "=== Проверка порта 8000 ==="
-            ss -tlnp | grep 8080 || netstat -tlnp | grep 8080 || echo "Порт 8080 не слушается!"
 
             # Удаляем образы, которые не используются
             docker image prune -f
