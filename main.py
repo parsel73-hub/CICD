@@ -16,23 +16,3 @@ async def get_time():
         "utc_time": now.strftime("%Y-%m-%d %H:%M:%S"),
         "utc_date": now.strftime("%Y-%m-%d"),
     }
-
-
-@app.get("/date")
-async def get_date():
-    now = datetime.now(timezone.utc)
-    return {
-        "date": now.strftime("%Y-%m-%d"),
-        "day": now.day,
-        "month": now.month,
-        "year": now.year,
-    }
-
-
-@app.get("/date/format")
-async def get_date_format(fmt: str = "%Y-%m-%d"):
-    now = datetime.now(timezone.utc)
-    return {
-        "format": fmt,
-        "date": now.strftime(fmt),
-    }
