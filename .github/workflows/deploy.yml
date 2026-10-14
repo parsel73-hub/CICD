@@ -51,36 +51,72 @@ jobs:
     needs: build-and-push
     if: github.ref == 'refs/heads/main'
     steps:
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SERVER_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
+          key_path: ~/.ssh/id_rsa
+          passphrase: ${{ secrets.SERVER_SSH_PASSPHRASE }}
           port: ${{ secrets.SERVER_PORT || 22 }}
+          command_timeout: 5m
           script: |
+            # Проверка Docker
+            echo "=== Проверка Docker ==="
+            docker --version
+            docker info || echo "Docker не запущен!"
+
+            # Проверка текущего контейнера
+            echo "=== Текущие контейнеры ==="
+            docker ps -a | grep time-server || echo "Контейнер time-server не найден!"
+
             # Логинимся в GHCR на сервере
             echo ${{ secrets.GITHUB_TOKEN }} | docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
 
             # Останавливаем и удаляем старый контейнер, если он есть
+            echo "=== Остановка старого контейнера ==="
             docker stop time-server || true
             docker rm time-server || true
 
             # Удаляем старый образ
+            echo "=== Удаление старого образа ==="
             docker rmi ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest || true
 
             # Скачиваем новый образ
+            echo "=== Скачивание нового образа ==="
             docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
             # Создаём тег latest для нового образа
             docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
 
             # Запускаем новый контейнер
+            echo "=== Запуск контейнера ==="
             docker run -d \
               --name time-server \
               --restart unless-stopped \
-              -p 8000:8000 \
+              -p 8080:8000 \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+            # Ждём запуска
+            sleep 3
+
+            # Проверка контейнера
+            echo "=== Статус контейнера ==="
+            docker ps | grep time-server
+
+            # Логи контейнера
+            echo "=== Логи контейнера ==="
+            docker logs time-server
+
+            # Проверка порта
+            echo "=== Проверка порта 8000 ==="
+            ss -tlnp | grep 8080 || netstat -tlnp | grep 8080 || echo "Порт 8080 не слушается!"
 
             # Удаляем образы, которые не используются
             docker image prune -f
