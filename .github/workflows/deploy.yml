@@ -51,6 +51,13 @@ jobs:
     needs: build-and-push
     if: github.ref == 'refs/heads/main'
     steps:
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SERVER_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          echo "SSH key file created: $(ls -la ~/.ssh/id_rsa)"
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
         with:
