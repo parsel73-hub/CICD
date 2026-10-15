@@ -44,6 +44,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          provenance: false
+          platforms: linux/amd64
 
   deploy:
     name: Deploy to Server
@@ -70,12 +72,18 @@ jobs:
           script: |
             # Останавливаем и удаляем старый контейнер, если он есть
             echo "=== Остановка старого контейнера ==="
-            docker stop time-server || true
-            docker rm time-server || true
+            docker stop time-server 2>/dev/null || true
+            docker rm time-server 2>/dev/null || true
+
+            # Логинимся в GHCR
+            echo "=== Вход в GHCR ==="
+            echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u parsel73-hub --password-stdin
+            echo "Логин: $? (0=успех)"
 
             # Скачиваем новый образ
             echo "=== Скачивание нового образа ==="
-            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            docker pull ghcr.io/parsel73-hub/cicd:latest 2>&1
+            echo "Pull: $? (0=успех)"
 
             # Запускаем новый контейнер
             echo "=== Запуск контейнера ==="
@@ -83,7 +91,8 @@ jobs:
               --name time-server \
               --restart unless-stopped \
               -p 8080:8000 \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+              ghcr.io/parsel73-hub/cicd:latest 2>&1
+            echo "Run: $? (0=успех)"
 
             # Ждём запуска
             sleep 3
@@ -94,7 +103,4 @@ jobs:
 
             # Логи контейнера
             echo "=== Логи контейнера ==="
-            docker logs time-server
-
-            # Удаляем образы, которые не используются
-            docker image prune -f
+            docker logs time-server 2>&1
